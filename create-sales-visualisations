@@ -1,0 +1,112 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import os
+os.chdir(path=r'C:\Users\Analist2\Documents\Pyton Scripts')
+
+# Read file
+filename = "Sales-detail-report.xlsx"
+df = pd.read_excel(filename)
+
+# Extract the data by cleaning return invoices
+sales_df = df[df['Fiş Tipi']=='Sales Invoice']
+sales_df = sales_df.query("`Product Group` not in ['Promotional Product', 'Marketing Product']")
+
+# Split text expressions
+# Define quantitative columns 
+quanta_cols = ['Quantity', 'Row Amount', 'Discount', 'VAT',  'Total Amount']
+# Halve quantitative column values of mixed boxes 
+for col in quanta_cols:
+    sales_df.loc[sales_df['Flavour Type'] == 'Bitter, Milk', col] = sales_df.loc[sales_df['Flavour Type'] == 'Bitter, Milk', col] / 2
+    sales_df.loc[sales_df['Flavour Type'] == 'Bitter, White', col] = sales_df.loc[sales_df['Flavour Type'] == 'Bitter, White', col] / 2
+
+sales_df['Flavour Type'] = sales_df['Flavour Type'].str.split(',')
+sales_df = sales_df.explode('Flavour Type')
+
+sales_df.summary()
+sales_df.describe()
+
+# Create datasets
+# Group by product groups
+sales_df_per_group = sales_df.groupby('Product Group').sum()
+# Group by flavour types
+sales_df_per_flavour = sales_df.groupby('Flavour Type').sum()
+# Group by product subgroups
+sales_df_per_subgroup = sales_df.groupby('Product Subgroup').sum()
+# Group by invoices
+sales_df_per_invoice = sales_df.groupby('Invoice No').agg({
+    'Customer ID': 'first',
+    'Customer Name': 'first',
+    'Invoice Date': 'first',
+    'Total Amount': 'sum',
+    'Quantity' : 'sum'
+}).reset_index()
+invoices_per_date =  sales_df_per_invoice.groupby('Invoice Date').sum()
+invoices_per_date['Number of Invoices'] = sales_df_per_invoice.groupby('Invoice Date').count()['Invoice No']
+
+''' Alternative Way
+invoices_per_date =  sales_df_per_invoice.groupby('Invoice Date').count().drop(['Customer ID', 'Customer Name', 'Total Amount'], axis= 1).rename(columns={'Invoice No': 'Number of Invoices'})
+invoices_per_date['Total Amount'] = sales_df_per_invoice.groupby('Invoice Date').sum()['Total Amount']
+invoices_per_date['Quantity'] = sales_df_per_invoice.groupby('Invoice Date').sum()['Quantity']
+'''
+# Number of Sales by Date
+rows = 10
+cols = 8
+plt.figure(figsize=(rows, cols))
+plt.bar(invoices_per_date.index, invoices_per_date['Quantity'], color='skyblue')
+plt.xlabel('Date')
+plt.xticks(rotation=90)
+plt.ylabel('Number of Sales')
+plt.title('Number of Sales by Date')
+plt.show()
+
+# Sales Volume by Date
+plt.figure(figsize=(rows, cols))
+plt.bar(invoices_per_date.index, invoices_per_date['Total Amount'], color='green')
+x = 0
+for n in invoices_per_date['Total Amount']:
+    plt.text( x, n, int(n), ha='center', va='bottom')
+    x += 1
+plt.xlabel('Date')
+plt.xticks(rotation=90)
+plt.ylabel('Sales Volume')
+plt.title('Sales Volume by Date')
+plt.show()
+
+# Number of Invoices by Date
+plt.figure(figsize=(rows, cols))
+plt.bar(invoices_per_date.index, invoices_per_date['Number of Invoices'], color='brown')
+x = 0
+for n in invoices_per_date['Number of Invoices']:
+    plt.text( x, n, n, ha='center', va='bottom')
+    x += 1
+plt.xlabel('Date')
+plt.xticks(rotation=90)
+plt.ylabel('Number of Invoices')
+plt.title('Number of Invoices by Date')
+plt.show()
+
+colors = ['#ff9999', '#66b3ff', '#99ff99', '#ffcc99', '#c2c2f0', '#ffb3e6', '#99e6e6', '#c2f0c2']
+# Draw pie charts
+plt.figure(figsize=(20, 16))
+
+# Figür 1
+plt.subplot(1, 3, 1)
+plt.pie(sales_df_per_group['Total Amount'], labels=sales_df_per_group.index, autopct='%1.1f%%', startangle=140, colors=colors)
+plt.title('Sales Volume by Product Groups')
+
+# Figür 2
+plt.subplot(1, 3, 2)
+wedges, texts, autotexts = plt.pie(sales_df_per_flavour['Total Amount'], labels=sales_df_per_flavour.index, autopct='%1.1f%%', startangle=140, colors = colors)
+for text, autotext in zip(texts, autotexts):
+    text.set(size=10)
+    autotext.set(size=8)
+plt.setp(autotexts, size=8)
+plt.title('Göre Sales Volume by Flavour Types')
+
+# Figür 3
+plt.subplot(1, 3, 3)
+plt.pie(sales_df_per_subgroup['Total Amount'], labels=sales_df_per_subgroup.index, autopct='%1.1f%%', startangle=140, colors=colors)
+plt.title('Sales Volume by Product Subroups')
+
+plt.tight_layout()
+plt.show()
